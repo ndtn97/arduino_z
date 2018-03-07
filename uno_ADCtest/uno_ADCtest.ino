@@ -2,7 +2,7 @@
 #define MAX_V 5.0 //Arduino UNO MAX input Voltage
 #define BUFSIZE 256 //BufferSize
 #define TRIG_Volt 2.5 //Trigger Voltage
-#define TRIG_LV (int)((float)1024*(float)((float)TRIG_Volt/(float)5.0)) //Trigger Level 0-1023
+#define TRIG_LV (int)((float)1023*(float)((float)TRIG_Volt/(float)5.0)) //Trigger Level 0-1023
 
 
 int an0 = 0; //an0 value
@@ -39,7 +39,7 @@ void timerFire() {
 }
 
 float idx2Volt(int d) {
-  return ((float)d / (float)1024) * (float)MAX_V;
+  return ((float)d / (float)1023) * (float)MAX_V;
 }
 
 void sendWave(int* d, int* d1, int n) {
