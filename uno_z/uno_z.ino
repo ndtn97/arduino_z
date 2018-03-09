@@ -1,8 +1,10 @@
 #include <TimerOne.h>
+#include <stdlib.h>
 #define MAX_V 5.0 //Arduino UNO MAX input Voltage
+#define BUFSIZE 256 //BufferSize
 #define TRIG_Volt 2.5 //Trigger Voltage
 #define TRIG_LV (int)((float)1023*(float)((float)TRIG_Volt/(float)5.0)) //Trigger Level 0-1023
-#define BAUD 9600//Baudrate
+#define BAUD 115200//Baudrate
 #define R_I 20000.0//20k[ohm]
 
 
@@ -10,10 +12,34 @@ int an0 = 0; //an0 value
 int an1 = 0; //an1 value
 int peak_an0[2];//peak of an0 value [0]:min [1]:max
 int peak_an1[2];//peak of an1 value [0]:min [1]:max
+int val0[BUFSIZE]; //sample data from an0
+int val1[BUFSIZE]; //sample date from an1
+int count = 0; //index counter
 bool Lv_Shifted = false;//Enable/Disable LevelShift for Negative Voltage(True:Need a Additional Circuit)
-bool showPeak = true;//Show Peak Val every 1000ms
+bool showPeak = false;//Show Peak Val every 1000ms
+bool finished = false;//Flag:if sample count == 256 ->true
+bool showScope = false;
+char mode = 0;
 
-float calcZ() {//calculation of Z
+void sendWave(int* d, int* d1, int n) {
+  for (int i = 0; i < n; i++) {
+    //A0
+    Serial.print(idx2Volt(d[i]));
+    Serial.print(",");
+    Serial.print(idx2Volt(peak_an0[0]));
+    Serial.print(",");
+    Serial.print(idx2Volt(peak_an0[1]));
+    Serial.print(",");
+    //A2
+    Serial.print(idx2Volt(d1[i]));
+    Serial.print(",");
+    Serial.print(idx2Volt(peak_an1[0]));
+    Serial.print(",");
+    Serial.println(idx2Volt(peak_an1[1]));
+  }
+}
+
+float calcZ() {//calculation of |Z|
   float V1 = 0.0; //an0:Function Gen
   float V2 = 0.0; //an0-an1:V_R
   V1 = idx2Volt(peak_an0[1]);
@@ -42,6 +68,13 @@ void timerFire() {//sampling
     peak_an1[1] = an1;
   }
 
+  if (count < BUFSIZE) {
+    val0[count] = an0;//collect data
+    val1[count] = an1;
+    count++;
+  } else {//if counter reached to BUFSIZE
+    finished = true;
+  }
   digitalWrite(13, LOW);//Debug Pin
 }
 
@@ -75,6 +108,25 @@ void sendPeak() {
   return;
 }
 
+void setSampRate() {
+  long int period = 50;
+  String in;
+  Timer1.stop();
+  Serial.println("Stopped");
+  Serial.println("SamplingPeriod?");
+  while (Serial.available() == 0);
+  in = Serial.readString();
+  period = in.toInt();
+  Serial.print("Started@");
+  Serial.print(period);
+  Serial.print("[microsec]/");
+  Serial.print(((float)1 / (float)period) * 1000000);
+  Serial.println("[Hz]");
+  Timer1.initialize(period);//microseconds
+  Timer1.start();
+  return;
+}
+
 void setup() {
 
   //Fast ADC Register settings
@@ -91,8 +143,8 @@ void setup() {
 
   Serial.begin(BAUD); //baud rate is 115200 baud(USB Serial)
   pinMode(A0, INPUT); //A0 Port(Analog 0) is INPUT
-  pinMode(A2, INPUT); //A2 Port(Analog 1) is INPUT
-  pinMode(13, OUTPUT);//13 is Digital OUT
+  pinMode(A2, INPUT); //A2 Port(Analog 2) is INPUT
+  pinMode(13, OUTPUT);//pin 13 is Digital OUT
   digitalWrite(13, LOW); //set Digital pin 13 LOW
   resetPeak();//Peak reset
   Timer1.initialize(50);//50 microseconds period(20kHz)
@@ -140,9 +192,37 @@ void loop() {
           Serial.println("ShowPeakValue:OFF");
         }
         break;
+      case '5':
+        //received "5"
+        showScope = !showScope;
+        if (showScope == true) {
+          Serial.println("Wave:ON");
+        } else {
+          Serial.println("Wave:OFF");
+        }
+        break;
+      case '6'://update sampling rate
+        setSampRate();
     }
   }
   if (showPeak) sendPeak();
+
+  if (finished == true) {
+    Timer1.stop();
+
+    //Serial.print("Stopped");
+    //Serial.println(count);
+
+    if (showScope) sendWave(val0, val1, BUFSIZE);
+    delay(1000);
+
+    //Serial.println("Started");
+
+    finished = false;
+    count = 0;
+    Timer1.start();
+  }
+
   delay(1000);
 }
 
