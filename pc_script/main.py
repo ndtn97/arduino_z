@@ -20,14 +20,17 @@ class serThread(threading.Thread):
         while 1:
             input_line = ser.readline().decode().replace('\r\n', '')
             if input_line[0] != '#':
-                input_vals = input_line.split(',')
-                input_vals = [float(i) for i in input_vals]
-                count=int(input_vals[6])
-                ToDict = {'an0': input_vals[0], 'an0_min': input_vals[1], 'an0_max': input_vals[2], 'an1': input_vals[3], 'an1_min': input_vals[4], 'an1_max': input_vals[5]}
-                self.tmpdict[count].update(ToDict)
-                if count == int(BUFSIZE - 1):
-                    #print(self.tmpdict)
-                    self.dict=self.tmpdict
+                try:
+                    input_vals = input_line.split(',')
+                    input_vals = [float(i) for i in input_vals]
+                    count=int(input_vals[6])
+                    ToDict = {'an0': input_vals[0], 'an0_min': input_vals[1], 'an0_max': input_vals[2], 'an1': input_vals[3], 'an1_min': input_vals[4], 'an1_max': input_vals[5]}
+                    self.tmpdict[count].update(ToDict)
+                    if count == int(BUFSIZE - 1):
+                        #print(self.tmpdict)
+                        self.dict = self.tmpdict
+                except:
+                    pass
 
 
 def outToCSV(rows):
