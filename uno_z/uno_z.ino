@@ -35,7 +35,10 @@ void sendWave(int* d, int* d1, int n) {
     Serial.print(",");
     Serial.print(idx2Volt(peak_an1[0]));
     Serial.print(",");
-    Serial.println(idx2Volt(peak_an1[1]));
+    Serial.print(idx2Volt(peak_an1[1]));
+    //id
+    Serial.print(",");
+    Serial.println(i);
   }
 }
 
@@ -112,12 +115,12 @@ void setSampRate() {
   long int period = 50;
   String in;
   Timer1.stop();
-  Serial.println("Stopped");
-  Serial.println("SamplingPeriod?");
+  Serial.println("#Stopped");
+  Serial.println("#SamplingPeriod?");
   while (Serial.available() == 0);
   in = Serial.readString();
   period = in.toInt();
-  Serial.print("Started@");
+  Serial.print("#Started@");
   Serial.print(period);
   Serial.print("[microsec]/");
   Serial.print(((float)1 / (float)period) * 1000000);
@@ -150,8 +153,8 @@ void setup() {
   Timer1.initialize(50);//50 microseconds period(20kHz)
   Timer1.attachInterrupt(timerFire);//Timer Triggers Function(timerFire)
   Timer1.start();//Timer1 start
-  Serial.print("Started at TRIG_LV=");
-  Serial.println(TRIG_LV);
+  Serial.print("#BUFSIZE=");
+  Serial.println(BUFSIZE);
 }
 
 void loop() {
@@ -167,15 +170,15 @@ void loop() {
       case '1'://reset
         //received "1"
         resetPeak();
-        Serial.println("Reset");
+        Serial.println("#Reset");
         break;
       case '2'://toggle lvshift
         //received "2"
         Lv_Shifted = !Lv_Shifted;
         if (Lv_Shifted == true) {
-          Serial.println("LvShift:ON");
+          Serial.println("#LvShift:ON");
         } else {
-          Serial.println("LvShift:OFF");
+          Serial.println("#LvShift:OFF");
         }
         break;
       case '3'://calculate z
@@ -187,18 +190,18 @@ void loop() {
         //reveived "4"
         showPeak = !showPeak;
         if (showPeak == true) {
-          Serial.println("ShowPeakValue:ON");
+          Serial.println("#ShowPeakValue:ON");
         } else {
-          Serial.println("ShowPeakValue:OFF");
+          Serial.println("#ShowPeakValue:OFF");
         }
         break;
       case '5':
         //received "5"
         showScope = !showScope;
         if (showScope == true) {
-          Serial.println("Wave:ON");
+          Serial.println("#Wave:ON");
         } else {
-          Serial.println("Wave:OFF");
+          Serial.println("#Wave:OFF");
         }
         break;
       case '6'://update sampling rate
