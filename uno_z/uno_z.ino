@@ -7,18 +7,19 @@
 #define BAUD 115200//Baudrate
 #define R_I 20000.0//20k[ohm]
 
-
+long int period = 50;
 int an0 = 0; //an0 value
 int an1 = 0; //an1 value
 int peak_an0[2];//peak of an0 value [0]:min [1]:max
 int peak_an1[2];//peak of an1 value [0]:min [1]:max
 int val0[BUFSIZE]; //sample data from an0
 int val1[BUFSIZE]; //sample date from an1
+int peakIdx[2]; //peakIdx[0]:an0 peak index,peakIdx[1]:an1 peak index
 int count = 0; //index counter
 bool Lv_Shifted = false;//Enable/Disable LevelShift for Negative Voltage(True:Need a Additional Circuit)
 bool showPeak = false;//Show Peak Val every 1000ms
 bool finished = false;//Flag:if sample count == 256 ->true
-bool showScope = false;
+bool showScope = true;
 char mode = 0;
 
 void sendWave(int* d, int* d1, int n) {
@@ -42,17 +43,16 @@ void sendWave(int* d, int* d1, int n) {
   }
 }
 
-float calcZ() {//calculation of |Z|
-  float V1 = 0.0; //an0:Function Gen
-  float V2 = 0.0; //an0-an1:V_R
-  V1 = idx2Volt(peak_an0[1]);
-  V2 = idx2Volt(peak_an0[1] - peak_an1[1]);
-  if (V2 == 0.0) {
-    Serial.print("error(devide by zero) ");
-    return 0.0;
-  } else {
-    return (float)((float)V1 / (float)V2) * (float)R_I;
-  }
+float phaseDiff() {//calculation of phase differential
+  float a0_t, a1_t;
+  a0_t = period * peakIdx[0];
+  a1_t = period * peakIdx[1];
+  Serial.print("#p,");
+  Serial.print(a0_t);
+  Serial.print(',');
+  Serial.print(a1_t);
+  Serial.print(',');
+  Serial.println(a0_t - a1_t);
 }
 
 void timerFire() {//sampling
@@ -64,11 +64,13 @@ void timerFire() {//sampling
     peak_an0[0] = an0;
   } else if (an0 > peak_an0[1]) { //an0:MAX
     peak_an0[1] = an0;
+    peakIdx[0] = count;
   }
   if (an1 < peak_an1[0]) {//an1:MIN
     peak_an1[0] = an1;
   } else if (an1 > peak_an1[1]) {//an1:MAX
     peak_an1[1] = an1;
+    peakIdx[1] = count;
   }
 
   if (count < BUFSIZE) {
@@ -94,6 +96,9 @@ void resetPeak() {//reset arrays
   peak_an0[1] = 0; //peak max reset
   peak_an1[0] = 1023; //peak min reset
   peak_an1[1] = 0; //peak max reset
+  peakIdx[0] = 0.0;
+  peakIdx[1] = 0.0;
+  peakIdx[2] = 0.0;
   return;
 }
 
@@ -112,7 +117,7 @@ void sendPeak() {
 }
 
 void setSampRate() {
-  long int period = 50;
+
   String in;
   Timer1.stop();
   Serial.println("#Stopped");
@@ -150,10 +155,10 @@ void setup() {
   pinMode(13, OUTPUT);//pin 13 is Digital OUT
   digitalWrite(13, LOW); //set Digital pin 13 LOW
   resetPeak();//Peak reset
-  Timer1.initialize(50);//50 microseconds period(20kHz)
+  Timer1.initialize(period);//50 microseconds period(20kHz)
   Timer1.attachInterrupt(timerFire);//Timer Triggers Function(timerFire)
   Timer1.start();//Timer1 start
-  Serial.print("#BUFSIZE=");
+  Serial.print("#BUFSIZE");
   Serial.println(BUFSIZE);
 }
 
@@ -183,8 +188,7 @@ void loop() {
         break;
       case '3'://calculate z
         //received "3"
-        Serial.print(calcZ());
-        Serial.println(" [ohm]");
+        phaseDiff();
         break;
       case '4'://show peak ON/OFF
         //reveived "4"
@@ -216,7 +220,11 @@ void loop() {
     //Serial.print("Stopped");
     //Serial.println(count);
 
-    if (showScope) sendWave(val0, val1, BUFSIZE);
+    if (showScope) {
+      sendWave(val0, val1, BUFSIZE);
+      phaseDiff();
+    }
+
     delay(1000);
 
     //Serial.println("Started");
