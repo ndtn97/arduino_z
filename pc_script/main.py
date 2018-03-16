@@ -3,6 +3,7 @@ import threading
 import csv
 from serial.tools import list_ports
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import numpy as np
 
 helpdialog ="csv:write data to csv file\r\nexit:close this app\r\ndict:output data to console\r\nread:output raw serial input"
@@ -15,55 +16,44 @@ parameters = ['id', 'an0', 'an0_min', 'an0_max', 'an1', 'an1_min', 'an1_max']
 WATCH_SER_PORT = False
 STREAM_ON = True
 
+def wavePlotter(bufsize, x, y0, y1):
+    fig = plt.figure()
+    ax=fig.add_subplot(111)
+    #ax.cla()
+    ax.plot(x,y0,marker = '.', linestyle = '-', color = '#fa4b00', label = 'an0')
+    ax.plot(x, y1, marker='.', linestyle='-', color='#0b225d', label='an1')
 
-class drawThread(threading.Thread):
-    def __init__(self, bufsize, y0, y1,refresh_flag):
-        super(drawThread, self).__init__()
-        self.BUFSIZE = bufsize
-        self.data0 = y0
-        self.data1 = y1
-        self.fig = plt.figure()
-        self.ax = self.fig.add_subplot(111)
-        self.x = [i for i in range(self.BUFSIZE)]
-        self.REFRESH = refresh_flag
-    def run(self):
-        while 1:
-            self.ax.clear()
-            self.ax.plot(self.x,self.data0,marker = '.', linestyle = '-', color = '#fa4b00', label = 'an0')
-            self.ax.plot(self.x, self.data1, marker='.', linestyle='-', color='#0b225d', label='an1')
-            print("LIB")
-            # x and y lables
-            self.ax.set_title('Input Volt')
-            self.ax.set_xlabel('Samples')
-            self.ax.set_ylabel('[V]')
-            self.ax.xaxis.label.set_color('#555555')
-            self.ax.yaxis.label.set_color('#555555')
+    # x and y lables
+    ax.set_title('Input Volt')
+    ax.set_xlabel('Samples')
+    ax.set_ylabel('[V]')
+    ax.xaxis.label.set_color('#555555')
+    ax.yaxis.label.set_color('#555555')
 
-            # axis color
-            self.ax.spines['top'].set_color('#555555')
-            self.ax.spines['bottom'].set_color('#555555')
-            self.ax.spines['left'].set_color('#555555')
-            self.ax.spines['right'].set_color('#555555')
-            self.ax.tick_params(axis = 'x', colors ='#555555')
-            self.ax.tick_params(axis='y', colors='#555555')
-            
-            # legend color
-            axlegend = self.ax.legend(loc = 2, frameon = True, fontsize = 'medium', fancybox = True, numpoints = 1)
-            axlegend.get_frame().set_edgecolor('#CFCFCF')
-            axlegend.get_frame().set_alpha(0.8)
-            for axtext in axlegend.get_texts():
-                axtext.set_color('#555555')
-            print('LIB2')
-            # grid line
-            self.ax.xaxis.grid(True, which = 'major', linestyle = ':', color = '#CFCFCF')
-            self.ax.yaxis.grid(True, which = 'major', linestyle = '-', color = '#CFCFCF')
-            self.ax.set_axisbelow(True)
+    # axis color
+    ax.spines['top'].set_color('#555555')
+    ax.spines['bottom'].set_color('#555555')
+    ax.spines['left'].set_color('#555555')
+    ax.spines['right'].set_color('#555555')
+    ax.tick_params(axis = 'x', colors ='#555555')
+    ax.tick_params(axis='y', colors='#555555')
 
-            #plt.show()
-            plt.pause(0.1)
-            print('LIB3')
-            while(self.REFRESH == False):
-                pass
+    # legend color
+    axlegend = ax.legend(loc = 2, frameon = True, fontsize = 'medium', fancybox = True, numpoints = 1)
+    axlegend.get_frame().set_edgecolor('#CFCFCF')
+    axlegend.get_frame().set_alpha(0.8)
+    for axtext in axlegend.get_texts():
+        axtext.set_color('#555555')
+
+    # grid line
+    ax.xaxis.grid(True, which = 'major', linestyle = ':', color = '#CFCFCF')
+    ax.yaxis.grid(True, which = 'major', linestyle = '-', color = '#CFCFCF')
+    ax.set_axisbelow(True)
+
+    plt.show()
+
+
+
 
 class serThread(threading.Thread):
     def __init__(self,valdict,phase_t,toPLT,updated):
@@ -132,6 +122,11 @@ if __name__ == '__main__':
 
     DRAW_REF = False
     toPLT = [[i for i in range(BUFSIZE)], [i for i in range(BUFSIZE)]]
+
+    #ani = animation.FuncAnimation(fig, wavePlotter, interval=100,fargs=(ax,BUFSIZE,[i for i in range(BUFSIZE)], toPLT[0], toPLT[1]))
+
+
+
     #drawHandler = drawThread(BUFSIZE, toPLT[0], toPLT[1], DRAW_REF)
     #drawHandler.setDaemon(True)
     #drawHandler.start()
@@ -169,5 +164,8 @@ if __name__ == '__main__':
             ser.write('1'.encode('utf-8'))
         elif key == 'stream':
             STREAM_ON = not(STREAM_ON)
-            print('STREAMING:'+str(STREAM_ON))
+            print('STREAMING:' + str(STREAM_ON))
+        elif key == 'plot':
+            print('notice:no commands while showing plot')
+            wavePlotter(BUFSIZE,[i for i in range(BUFSIZE)], toPLT[0], toPLT[1])
         key = ''
