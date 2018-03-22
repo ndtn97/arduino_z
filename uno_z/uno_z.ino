@@ -5,9 +5,8 @@
 #define TRIG_Volt 2.5 //Trigger Voltage
 #define TRIG_LV (int)((float)1023*(float)((float)TRIG_Volt/(float)5.0)) //Trigger Level 0-1023
 #define BAUD 115200//Baudrate
-#define R_I 20000.0//20k[ohm]
 
-long int period = 50;
+long period = 50;
 int an0 = 0; //an0 value
 int an1 = 0; //an1 value
 int peak_an0[2];//peak of an0 value [0]:min [1]:max
@@ -37,9 +36,11 @@ void sendWave(int* d, int* d1, int n) {
     Serial.print(idx2Volt(peak_an1[0]));
     Serial.print(",");
     Serial.print(idx2Volt(peak_an1[1]));
+    
     //id
     Serial.print(",");
     Serial.println(i);
+    
   }
 }
 
@@ -130,7 +131,9 @@ void setSampRate() {
   Serial.print("[microsec]/");
   Serial.print(((float)1 / (float)period) * 1000000);
   Serial.println("[Hz]");
+  count = 0;
   Timer1.initialize(period);//microseconds
+  Timer1.setPeriod(period);
   Timer1.start();
   return;
 }
@@ -156,6 +159,7 @@ void setup() {
   digitalWrite(13, LOW); //set Digital pin 13 LOW
   resetPeak();//Peak reset
   Timer1.initialize(period);//50 microseconds period(20kHz)
+  Timer1.setPeriod(period);
   Timer1.attachInterrupt(timerFire);//Timer Triggers Function(timerFire)
   Timer1.start();//Timer1 start
   Serial.print("#BUFSIZE");

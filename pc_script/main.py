@@ -10,11 +10,11 @@ pi=math.pi
 
 helpdialog ="csv:write data to csv file\r\nexit:close this app\r\ndict:output data to console\r\nread:output raw serial input"
 
-CSV_PATH='./out.csv'
+CSV_PATH='./'
 BUFSIZE = 256
 DEV_NAME = ''
 BAUD_RATE = 115200
-parameters = ['id', 'an0', 'an0_min', 'an0_max', 'an1', 'an1_min', 'an1_max']
+
 WATCH_SER_PORT = False
 STREAM_ON = True
 
@@ -106,7 +106,9 @@ class serThread(threading.Thread):
     
     def setStreamFlag(self, flag):
         self.stream_on = flag
-        
+
+    def resetDict(self):
+        self.dict = [[{'id':i,} for i in range(BUFSIZE)], [{'id':i,} for i in range(BUFSIZE)]] 
 
 def findPort():
     try:
@@ -118,9 +120,9 @@ def findPort():
         print('No device found')
         exit()
 
-def outToCSV(rows):
+def outToCSV(rows,parameters,filename):
     #print(rows)
-    with open(CSV_PATH, 'w', newline='') as csvfile:
+    with open(CSV_PATH+filename, 'w', newline='') as csvfile:
         fieldnames = parameters
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         
@@ -142,6 +144,10 @@ def calcFreq(data, period):
     samptm = 0.000001*period
     freq = 0.0
 
+    #Peak Values
+    max_v=0.0
+    max_idx=0
+
     while finished == False:
         all_cnt += 1
         if k_mode == 0:
@@ -152,6 +158,12 @@ def calcFreq(data, period):
                 k_mode = 2
                 up1_cnt = all_cnt
         elif k_mode == 2:
+
+            #Peak(Max) detection
+            if data[all_cnt] > max_v:
+                max_v = data[all_cnt]
+                max_idx = all_cnt
+
             if data[all_cnt] < thold:
                 k_mode = 3
                 dw_cnt = all_cnt
@@ -165,38 +177,39 @@ def calcFreq(data, period):
             
     freq = 1 / ((up2_cnt - up1_cnt) * samptm)
 
-    return freq
+    return (freq,max_v,max_idx)
 
 def calcPhaseDiff(diff_t, w_freq):
     w_period=float(1/w_freq)
     ph_diff_rad = float((diff_t / w_period) * 2 * pi)
     return ph_diff_rad
 
-def antiailiasing(bufsize, s_data, s_period):
-    #s_data:waveformdata,s_period:sampring period[s],freq_c:cut-off frequency[hz]
-    freq_c = (10 ** 6) / (2 * s_period)
-    s_period *= 0.000001
-    print(str(s_data)+' '+str(s_period)+' '+str(freq_c))
-    t = np.arange(0, bufsize * s_period, s_period)
-    freq = np.linspace(0, 1.0 / s_period, bufsize)
-    
-    F = np.fft.fft(s_data)
-    F = F / (bufsize / 2)
-    F[0] = F[0] / 2
-    F2 = F.copy()
-    print(F2)
-    F2[(freq > freq_c)] = 0
-    print(F2)
-    f2 = np.fft.ifft(F2)
-    f2 = np.real(f2 * bufsize)
-    return f2
+def setPeriod(ser, period):
+    ser.write('6'.encode('utf-8'))
+    if period >= 50:
+        ser.write(str(int(period)).encode('utf-8'))
+        print("sampling period set at" + str(period) + "[microsec]")
+    else:
+        print('50[microsec] < period')
+
+def setReset(ser):
+    ser.write('1'.encode('utf-8'))
+
+def plot(data):
+    try:
+        wavePlotter(ax, BUFSIZE, [i for i in range(BUFSIZE)], [data[i]['an0'] for i in range(BUFSIZE)], [data[i]['an1'] for i in range(BUFSIZE)])
+        return 0
+    except:
+        #print("No data Wait a minute...")
+        return(-1)
+
+
 
 if __name__ == '__main__':
     DEV_NAME = findPort()
     print("all commands for type \"help\"")
     ser = serial.Serial(DEV_NAME, BAUD_RATE)
     #ser.dtr = False
-
 
     period = 50
     #Plot
@@ -209,12 +222,80 @@ if __name__ == '__main__':
     serialListener.setDaemon(True)
     serialListener.start()
 
-    while 1:
+    mode = 'normal'
+
+    key = input('Mode \'1\':normal mode \t\'2\':Impedance Measure...')
+    if(key == '2'):
+        mode = 'imp'
+
+    if mode == 'imp':
+        try:
+            print('Frequency Range ?')
+            low_fq = float(input('From[Hz]...'))
+            high_fq = float(input('End[Hz]...'))
+            df = float(input('df[Hz]...'))
+        except:
+            print('Input number please')
+            exit()
+        
+        list_Freq = np.arange(low_fq, high_fq, df, 'float32')
+        print(list_Freq)
+        result = [{} for i in list_Freq]
+        cnt = 0
+        go_next = False
+        for FREQ in list_Freq:
+            go_next = False
+            while go_next == False:
+                #Set Function Generator
+
+                #Plot
+                data = serialListener.getData()
+                while plot(data) == -1:
+                    data = serialListener.getData()
+
+                #GetFreq Phase
+                data=serialListener.getData()
+                freq0 = calcFreq([data[i]['an0'] for i in range(BUFSIZE)], period)
+                freq1 = calcFreq([data[i]['an1'] for i in range(BUFSIZE)], period)
+                print('an0:' + format(freq0[0], '.2f') + '[Hz]' + format(1 / freq0[0]) + '[s]')
+                print('an1:' + format(freq1[0], '.2f') + '[Hz]' + format(1 / freq1[0]) + '[s]')
+                #t = serialListener.getPeakTime()
+                t=[freq0[2]*(period*0.000001),freq1[2]*(period*0.000001),(freq0[2]-freq1[2])*(period*0.000001)]
+                ph_d_rad = calcPhaseDiff(float(t[2]), freq0[0])
+                print(format(ph_d_rad, '.2f') + '[rad]')
+                
+                #Adjust Sampling Freq
+                key = input('Wrong ? y/n(Default is n)...')
+                if key == 'y':
+                    try:
+                        freq = float(input('Sampling Freq'))
+                        period = (float)(1 / freq)#[s]
+                        period = period * 10 ** 6 #[micro sec]
+                        setPeriod(ser, period)
+                    except:
+                        print('No change')
+                    setReset(ser)
+                    serialListener.resetDict()
+                else:
+                    tores = {'source[Hz]':FREQ,'an0_f[Hz]': freq0, 'an1_f[Hz]': freq1, 'phase_diff[rad]': ph_d_rad}
+                    result[cnt].update(tores)
+                    setReset(ser)
+                    cnt += 1
+                    go_next = True
+        
+        #Output CSV
+        parameters = ['source[Hz]', 'an0_f[Hz]','an1_f[Hz]', 'phase_diff[rad]']
+        outToCSV(result, parameters, 'impedance.csv')
+        print('measurement end')
+        #print(result)
+
+    while mode == 'normal':
         #Key input
         key = input()
         if key == 'csv': #write data to csv
             data = serialListener.getData()
-            outToCSV(data)
+            parameters = ['id', 'an0', 'an0_min', 'an0_max', 'an1', 'an1_min', 'an1_max']
+            outToCSV(data,parameters,'wave.csv')
         elif key == 'exit':#exit app
             exit()
         elif key == 'dict':#output dictionary data
@@ -225,37 +306,31 @@ if __name__ == '__main__':
         elif key == 'help':
             print(helpdialog)
         elif key == 'speriod':
-            ser.write('6'.encode('utf-8'))
             period = int(input())
-            if period >= 50:
-                ser.write(str(period).encode('utf-8'))
-            else:
-                period = 50
-                print('50[microsec] < period')
-            print("sampling period set at" + str(period) + "[microsec]")
+            setPeriod(ser, period)
+        elif key == 'shz':
+            freq = float(input())
+            period = (float)(1 / freq)#[s]
+            period = period * 10 ** 6 #[micro sec]
+            setPeriod(ser,period)
         elif key == 'ph':
             print(serialListener.getPeakTime())
         elif key == 'reset':
-            ser.write('1'.encode('utf-8'))
+            setReset(ser)
         elif key == 'stream':
             STREAM_ON = not(STREAM_ON)
             serialListener.setStreamFlag(STREAM_ON)
             print('STREAMING:' + str(STREAM_ON))
         elif key == 'plot':
-            try:
-                data = serialListener.getData()
-                #filterd = antiailiasing(BUFSIZE,[data[i]['an0'] for i in range(BUFSIZE)], period)
-                #wavePlotter(ax, BUFSIZE, [i for i in range(BUFSIZE)], filterd, [2.5 for i in range(BUFSIZE)])
-                wavePlotter(ax,BUFSIZE, [i for i in range(BUFSIZE)], [data[i]['an0'] for i in range(BUFSIZE)], [data[i]['an1'] for i in range(BUFSIZE)])
-            except:
-                print("No data Wait a minute...")
+            data = serialListener.getData()
+            plot(data)
         elif key == 'f':
             try:
                 data=serialListener.getData()
                 freq = calcFreq([data[i]['an0'] for i in range(BUFSIZE)], period)
-                print(format(freq, '.2f') + '[Hz]' + format(1 / freq) + '[s]')
+                print(format(freq[0], '.2f') + '[Hz]' + format(1 / freq[0]) + '[s]')
                 t = serialListener.getPeakTime()
-                ph_d_rad = calcPhaseDiff(float(t[2]), freq)
+                ph_d_rad = calcPhaseDiff(float(t[2]), freq[0])
                 print(format(ph_d_rad,'.2f')+'[rad]')
             except:
                 print("No data Wait a minute...")
