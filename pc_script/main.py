@@ -56,7 +56,7 @@ def wavePlotter(ax,bufsize, x, y0, y1):
 
     #plt.show()
 
-class serThread(threading.Thread):
+class serThread(threading.Thread):#<class> thread always connected to serial port Arduino
     def __init__(self,serdev):
         super(serThread, self).__init__()
         self.ser = serdev
